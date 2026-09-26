@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+
+# Virtual environments
+.venv/
+venv/
+
+# Local tooling
+.zencoder/
+.zenflow/
+.env
+.env.*
+!.env.example
+
+# Local app data
+data/*
+!data/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+
+# Local backups and temporary files
+*.bak
+*.tmp
+*.swp
+*_backup_*.js
+*_backup*.py
+app_backup.js
+
+# IDE
+.idea/
+.vscode/
+
+# RAG embedding cache
+.*_emb_cache/
