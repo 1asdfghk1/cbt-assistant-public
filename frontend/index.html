@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CBT 助手</title>
+    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/style.css?v=24">
+</head>
+
+<body>
+    <aside class="sidebar">
+        <button class="sidebar-btn" onclick="openThoughtHistoryModal()" title="思维日记" data-i18n-title="sidebar_thoughts"><i
+                data-lucide="notebook-pen" style="width:20px"></i></button>
+        <button class="sidebar-btn" onclick="openSleepHistoryModal()" title="睡眠日志" data-i18n-title="sidebar_sleep"><i data-lucide="moon"
+                style="width:20px"></i></button>
+        <button class="sidebar-btn" onclick="openModal('testsMenuModal')" title="心理测评" data-i18n-title="sidebar_assessment"><i
+                data-lucide="clipboard-list" style="width:20px"></i></button>
+        <button class="sidebar-btn" onclick="openCalendar()" title="记录日历" data-i18n-title="sidebar_calendar"><i data-lucide="calendar"
+                style="width:20px"></i></button>
+        <button class="sidebar-btn" onclick="openDashboard()" title="进度面板" data-i18n-title="sidebar_dashboard"><i data-lucide="bar-chart-2"
+                style="width:20px"></i></button>
+        <button class="sidebar-btn" onclick="openArticleLibrary()" title="文章库" data-i18n-title="sidebar_articles"><i data-lucide="book-open"
+                style="width:20px"></i></button>
+        <button class="sidebar-btn" onclick="openVideoLibrary()" title="视频库" data-i18n-title="sidebar_videos"><i data-lucide="play-circle"
+                style="width:20px"></i></button>
+
+        <!-- Download button pinned to bottom -->
+        <div
+            style="margin-top:auto; width:100%; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <button class="sidebar-btn" onclick="openNotifModal()" title="设置" data-i18n-title="sidebar_settings" id="notifSidebarBtn"><i
+                    data-lucide="settings-2" style="width:20px"></i></button>
+            <button class="sidebar-btn" onclick="openModal('downloadModal')" title="导出记录" data-i18n-title="sidebar_download"><i
+                    data-lucide="download" style="width:20px"></i></button>
+        </div>
+    </aside>
+
+    <div class="container empty-state" id="mainContainer">
+        <div class="header">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <i data-lucide="brain"></i>
+                <span style="font-weight: 500; color: var(--text);" data-i18n="app_title">CBT 助手</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <button onclick="openModal('sosModal')"
+                    style="background:#797298 !important; color:#ffffff !important; border:none; border-radius:10px; padding:7px 14px; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; letter-spacing:0.3px;"><i
+                        data-lucide="life-buoy" style="width:14px; color:#ffffff;"></i> <span data-i18n="sos_button">SOS</span></button>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="status-dot" id="dotStatus"></span>
+                    <span id="txtStatus" data-i18n="status_connecting">正在连接...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-box" id="messages">
+        </div>
+        <div class="input-dock" style="padding-top:8px;">
+            <div class="input-wrap"
+                style="flex-direction: column; align-items: stretch; padding: 12px 16px; border-radius: 16px;">
+
+                <textarea id="msgInput" rows="1" placeholder="今天有什么我可以帮助你的？" data-i18n-placeholder="input_placeholder"
+                    style="min-height: 36px; width: 100%; border:none; resize:none; background:transparent; outline:none; font-family:inherit; font-size:15px; overflow:hidden;"
+                    onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendMessage();}"></textarea>
+
+                <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 4px;">
+                    <!-- Right: Mic, Send -->
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <button class="btn-icon" id="ttsBtn" onclick="toggleTTS()" title="助手语音" data-i18n-title="tts_title"
+                            style="padding:4px;"><i data-lucide="volume-x" style="width:18px;"></i></button>
+                        <button class="btn-icon" id="micBtn" onclick="toggleMic()" title="语音输入" data-i18n-title="mic_title"
+                            style="padding:4px;"><i data-lucide="mic" style="width:18px;"></i></button>
+                        <button class="btn-send" id="sendBtn" onclick="sendMessage()"><i data-lucide="arrow-up"
+                                style="width:18px;"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <p
+                style="text-align:center; font-size:11px; color:var(--gray); opacity:0.6; margin:6px 0 0; letter-spacing:0.1px;">
+                <span data-i18n="assistant_disclaimer">AI 助手可能会出错。如遇严重或紧急情况，请及时寻求专业帮助。</span>
+            </p>
+
+            <div id="quickSuggestions"
+                style="display:flex; flex-wrap:wrap; justify-content:center; gap:8px; padding-top:16px; align-items:center;"></div>
+        </div> <!-- /quickSuggestions -->
+    </div> <!-- /input-dock -->
+    </div> <!-- /container -->
+
+    <!-- Mood Modal -->
+    <div class="modal-overlay" id="moodModal" onclick="if(event.target===this)closeModal('moodModal')">
+        <div class="modal">
+            <h2><span data-i18n="mood_modal_title">情绪</span> <button class="close" onclick="closeModal('moodModal')"><i data-lucide="x"
+                        style="width:20px"></i></button></h2>
+            <div style="text-align:center; margin: 20px 0;">
+                <div style="font-size: 36px; font-weight: 500; color: var(--accent); margin-bottom: 24px;"
+                    id="moodValLabel">5 / 10</div>
+                <input type="range" id="moodSlider" min="0" max="10" value="5"
+                    style="width:100%; margin-bottom: 24px; appearance: none; height: 4px; background: var(--border); border-radius: 2px;"
+                    oninput="document.getElementById('moodValLabel').innerText = this.value + ' / 10'">
+                <button class="btn-primary static-accent" onclick="logMood()" data-i18n="mood_log_button">记录当前状态</button>
+                <div id="moodHistory" style="margin-top:20px; font-size:13px; color:var(--gray);"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thought Record Modal -->
+    <div class="modal-overlay" id="thoughtModal" onclick="if(event.target===this)closeModal('thoughtModal')">
+        <div class="modal" style="max-width:620px;">
+            <div class="thought-modal-head">
+                <span id="thoughtModalTitle" class="thought-modal-title" data-i18n="thought_modal_title">思维与行动</span>
+                <button class="close" onclick="closeModal('thoughtModal')"><i
+                        data-lucide="x" style="width:20px"></i></button>
+            </div>
+            <div class="thought-modal-top">
+                <div class="type-toggle">
+                    <button type="button" class="type-toggle-btn active" id="ttBtn0" onclick="switchThoughtType('thought')"><i
+                            data-lucide="notebook-pen" style="width:13px;"></i> <span data-i18n="thought_tab_diary">思维日记</span></button>
+                    <button type="button" class="type-toggle-btn" id="ttBtn1" onclick="switchThoughtType('gratitude')"><i data-lucide="heart"
+                            style="width:13px;"></i> <span data-i18n="thought_tab_gratitude">感恩记录</span></button>
+                    <button type="button" class="type-toggle-btn" id="ttBtn2" onclick="switchThoughtType('rhythm')"><i data-lucide="check-square"
+                            style="width:13px;"></i> <span data-i18n="thought_tab_rhythm">每日节奏</span></button>
+                </div>
+            </div>
+            <p id="thoughtModalHint" style="font-size:13px; color:var(--gray); margin:-6px 0 18px; line-height:1.5;" data-i18n="thought_modal_hint">
+                记录发生的事情、当时的想法，以及一个更加平衡的看法。
+            </p>
+            <form onsubmit="submitThought(event)" id="tForm">
+                <!-- Full thought form -->
+                <div id="thoughtFormFull">
+                    <div class="fg"><label data-i18n="thought_label_situation">情境（发生了什么？）</label><textarea id="tSit" rows="2"></textarea>
+                    </div>
+                    <div class="fg"><label data-i18n="thought_label_thought">自动思维（当时想到了什么？）</label><textarea id="tThou"
+                            rows="2"></textarea></div>
+                    <div style="display:flex; gap:16px;">
+                        <div class="fg" style="flex:1;"><label data-i18n="thought_label_emotion">情绪</label><input type="text" id="tEmo"
+                                placeholder="例如：焦虑" data-i18n-placeholder="thought_placeholder_emotion"></div>
+                        <div class="fg" style="width:100px;"><label data-i18n="thought_label_intensity">强度（0-10）</label><input type="number" id="tInt"
+                                min="0" max="10" value="5"></div>
+                    </div>
+                    <div class="fg"><label data-i18n="thought_label_distortion">认知偏差</label>
+                        <select id="tDist">
+                            <option data-i18n="distortion_catastrophizing">灾难化</option>
+                            <option data-i18n="distortion_mind_reading">读心术</option>
+                            <option data-i18n="distortion_fortune_telling">预言未来</option>
+                            <option data-i18n="distortion_overgeneralization">过度概括</option>
+                            <option data-i18n="distortion_black_white">非黑即白</option>
+                            <option data-i18n="distortion_discounting_positive">忽视积极面</option>
+                            <option data-i18n="distortion_personalization">个人化</option>
+                            <option data-i18n="distortion_unsure">不确定</option>
+                        </select>
+                    </div>
+                    <div class="fg"><label data-i18n="thought_label_response">平衡回应</label><textarea id="tRat" rows="2"></textarea></div>
+                </div>
+                <!-- Gratitude form -->
+                <div id="gratitudeFormSection" style="display:none;">
+                    <p style="font-size:13px; color:var(--gray); margin-bottom:14px; line-height:1.6;" data-i18n="gratitude_prompt">写下今天让你感到感激的3件事，无论大小。</p>
+                    <div class="fg"><label data-i18n="gratitude_label">我今天感激什么？</label><textarea id="gratText" rows="5"
+                            placeholder="1. &#10;2. &#10;3. " data-i18n-placeholder="gratitude_placeholder"></textarea></div>
+                </div>
+                <button type="submit" class="btn-primary static-accent" id="tSub" data-i18n="thought_save">保存记录</button>
+            </form>
+            <div id="rhythmSection" style="display:none;">
+                <div id="actSlots" style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px;"></div>
+                <div id="actStats"
+                    style="text-align:center; font-size:13px; color:var(--text); display:none; padding:16px; background:var(--bg); border-radius:12px; border:1px solid var(--border);">
+                </div>
+            </div>
+            <div id="actMoodPopup"
+                style="display:none; position:fixed; inset:0; z-index:210; background:rgba(0,0,0,0.4); align-items:center; justify-content:center;">
+                <div
+                    style="background:var(--panel); border-radius:16px; padding:24px; max-width:300px; text-align:center; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+                    <p style="font-size:14px; color:var(--text); margin-bottom:4px; font-weight:600;" data-i18n="rhythm_mood_after">完成后心情如何？</p>
+                    <p id="actMoodTask" style="font-size:12px; color:var(--gray); margin-bottom:16px;"></p>
+                    <div style="display:flex; justify-content:center; gap:6px; margin-bottom:12px;" id="actMoodStars">
+                    </div>
+                    <button onclick="skipActMood()"
+                        style="background:none; border:none; color:var(--gray); font-size:12px; cursor:pointer;" data-i18n="skip">跳过</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tests Menu Modal -->
+    <div class="modal-overlay" id="testsMenuModal" onclick="if(event.target===this)closeModal('testsMenuModal')">
+        <div class="modal">
+            <h2><span data-i18n="assessment_title">心理测评</span> <button class="close" onclick="closeModal('testsMenuModal')"><i data-lucide="x"
+                        style="width:20px"></i></button></h2>
+            <div style="display:flex; flex-direction:column; gap:16px; margin-top:20px;">
+                <button class="test-menu-btn" onclick="closeModal('testsMenuModal'); openModal('phqModal')"
+                    style="display:flex; align-items:center; gap:16px; font-size:15px; padding:16px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:12px; cursor:pointer; text-align:left; transition:all 0.2s;">
+                    <div
+                        style="background:var(--accent-light); color:var(--accent); padding:10px; border-radius:10px; display:flex;">
+                        <i data-lucide="clipboard-list" style="width:24px; height:24px;"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-weight:600; margin-bottom:4px; font-size:15px;" data-i18n="assessment_phq_title">抑郁症状筛查（PHQ-9）</div>
+                        <div style="font-size:13px; color:var(--gray); font-weight:normal; line-height:1.4;" data-i18n="assessment_phq_desc">评估近期抑郁相关症状和情绪状态</div>
+                    </div>
+                </button>
+
+                <button class="test-menu-btn" onclick="closeModal('testsMenuModal'); openModal('gadModal')"
+                    style="display:flex; align-items:center; gap:16px; font-size:15px; padding:16px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:12px; cursor:pointer; text-align:left; transition:all 0.2s;">
+                    <div
+                        style="background:var(--accent-light); color:var(--accent); padding:10px; border-radius:10px; display:flex;">
+                        <i data-lucide="activity" style="width:24px; height:24px;"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-weight:600; margin-bottom:4px; font-size:15px;" data-i18n="assessment_gad_title">焦虑症状筛查（GAD-7）</div>
+                        <div style="font-size:13px; color:var(--gray); font-weight:normal; line-height:1.4;" data-i18n="assessment_gad_desc">评估近期焦虑和担忧程度</div>
+                    </div>
+                </button>
+
+                <button class="test-menu-btn" onclick="closeModal('testsMenuModal'); openModal('esteemModal')"
+                    style="display:flex; align-items:center; gap:16px; font-size:15px; padding:16px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:12px; cursor:pointer; text-align:left; transition:all 0.2s;">
+                    <div
+                        style="background:var(--accent-light); color:var(--accent); padding:10px; border-radius:10px; display:flex;">
+                        <i data-lucide="heart-handshake" style="width:24px; height:24px;"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-weight:600; margin-bottom:4px; font-size:15px;" data-i18n="assessment_esteem_title">自尊量表（Rosenberg）</div>
+                        <div style="font-size:13px; color:var(--gray); font-weight:normal; line-height:1.4;" data-i18n="assessment_esteem_desc">评估自我评价、自尊和内在支持</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PHQ-9 Modal -->
+    <div class="modal-overlay" id="phqModal" onclick="if(event.target===this)closeModal('phqModal')">
+        <div class="modal" style="max-width:580px;">
+            <h2><span data-i18n="phq_modal_title">PHQ-9 — 抑郁症状筛查</span> <button class="close" onclick="closeModal('phqModal')"><i
+                        data-lucide="x" style="width:20px"></i></button></h2>
+            <p style="color:var(--gray);font-size:13px;margin-bottom:20px;" data-i18n="phq_modal_desc">过去两周内，以下问题困扰你的频率是多少？</p>
+            <form id="phqForm" onsubmit="submitPHQ(event)">
+                <div id="phqQuestions"></div>
+                <button type="submit" class="btn-primary static-accent" style="margin-top:8px;" data-i18n="get_result">查看结果</button>
+            </form>
+            <div id="phqResult"
+                style="display:none; margin-top:20px; padding:20px; border-radius:12px; border:1px solid var(--border); background:var(--bg);">
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar Modal -->
+    <div class="modal-overlay" id="calModal" onclick="if(event.target===this)closeModal('calModal')">
+        <div class="modal" style="max-width:720px; padding:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <button onclick="calPrev()" class="close"><i data-lucide="chevron-left"
+                            style="width:20px"></i></button>
+                    <h2 style="margin:0; font-size:18px;" id="calTitle"></h2>
+                    <button onclick="calNext()" class="close"><i data-lucide="chevron-right"
+                            style="width:20px"></i></button>
+                </div>
+                <button class="close" onclick="closeModal('calModal')"><i data-lucide="x"
+                        style="width:20px"></i></button>
+            </div>
+            <div style="display:flex; gap:20px;">
+                <div style="flex:0 0 300px;">
+                    <div class="cal-grid-head"></div>
+                    <div id="calGrid" class="cal-grid"></div>
+                    <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+                        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gray);"><span
+                                style="width:8px;height:8px;background:var(--accent);border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                            <span data-i18n="calendar_legend_thoughts">思维</span></span>
+                        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gray);"><span
+                                style="width:8px;height:8px;background:#f59e0b;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                            <span data-i18n="calendar_legend_mood">情绪</span></span>
+                        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gray);"><span
+                                style="width:8px;height:8px;background:#38bdf8;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                            <span data-i18n="calendar_legend_sleep">睡眠</span></span>
+                        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gray);"><span
+                                style="width:8px;height:8px;background:#10b981;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                            <span data-i18n="calendar_legend_activities">活动</span></span>
+                        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--gray);"><span
+                                style="width:8px;height:8px;background:#ef4444;border-radius:50%;display:inline-block;flex-shrink:0;"></span>
+                            <span data-i18n="calendar_legend_assessment">测评</span></span>
+                    </div>
+                </div>
+                <div style="flex:1; border-left:1px solid var(--border); padding-left:20px; min-height:300px;">
+                    <div id="calDayTitle" style="font-size:14px;font-weight:600;margin-bottom:16px;color:var(--gray);">
+                        <span data-i18n="calendar_pick_day">选择日期</span></div>
+                    <div id="calDayContent" style="font-size:13px; line-height:1.6;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Modal -->
+    <div class="modal-overlay" id="dashModal" onclick="if(event.target===this)closeModal('dashModal')">
+        <div class="modal" style="max-width:700px; padding:28px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <h2 style="margin:0; display:flex;align-items:center;gap:8px;"><i data-lucide="bar-chart-2"
+                        style="width:20px;color:var(--accent)"></i> <span data-i18n="dashboard_title">进度面板</span></h2>
+                <button class="close" onclick="closeModal('dashModal')"><i data-lucide="x"
+                        style="width:20px"></i></button>
+            </div>
+            <!-- Stat cards -->
+
+            <!-- AI Insights Section -->
+            <div
+                style="background: var(--accent-light); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; position:relative;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div
+                        style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--accent);">
+                        <i data-lucide="sparkles" style="width:15px;"></i> <span data-i18n="dashboard_insights">AI 分析</span>
+                    </div>
+                    <button id="dashInsightsBtn" onclick="loadInsights()"
+                        style="font-size:11px; background:none; border:1px solid var(--accent); color:var(--accent); border-radius:20px; padding:3px 10px; cursor:pointer; opacity:0.75;">
+                        <span data-i18n="refresh">刷新</span>
+                    </button>
+                </div>
+                <p id="dashInsightsText"
+                    style="font-size:13px; line-height:1.65; color:var(--text); margin:0; white-space:pre-line;">
+                    <span data-i18n="loading">加载中…</span>
+                </p>
+            </div>
+
+            <div id="dashCards" style="display:flex;gap:12px;margin-bottom:24px;"></div>
+            <!-- Mood chart -->
+            <div style="margin-bottom:24px;">
+                <div class="dash-section-title" data-i18n="dashboard_mood_14">最近14天情绪变化</div>
+                <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;">
+                    <div id="dashMoodChart"></div>
+                </div>
+            </div>
+            <!-- Bottom row: sleep + tests -->
+            <div style="display:flex;gap:16px;">
+                <div style="flex:1;">
+                    <div class="dash-section-title" data-i18n="dashboard_sleep_7">最近7天睡眠质量</div>
+                    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;">
+                        <div id="dashSleepChart"></div>
+                    </div>
+                </div>
+                <div style="flex:1;">
+                    <div class="dash-section-title" data-i18n="assessment_dashboard_title">心理测评（PHQ-9 / GAD-7 / Rosenberg）</div>
+                    <div id="dashTests"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div class="modal-overlay" id="histModal" onclick="if(event.target===this)closeModal('histModal')">
+        <div class="modal" style="max-width: 840px; padding: 24px 24px 0 36px; overflow: hidden;">
+            <h2 style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="display:flex; align-items:center; gap:8px;">
+                    <i data-lucide="notebook-pen" style="width:18px; color:var(--accent);"></i>
+                    <span data-i18n="history_title">思维日记</span>
+                </span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="suggest-btn entry-btn" onclick="closeModal('histModal'); openThoughtModalSection('thought');"
+                        title="新建记录" data-i18n-title="new_entry">
+                        <i data-lucide="plus" style="width:14px;"></i> <span data-i18n="new_entry">新建记录</span>
+                    </button>
+                    <button class="close" onclick="closeModal('histModal')"><i data-lucide="x"
+                            style="width:20px"></i></button>
+                </div>
+            </h2>
+            <div id="histContent" style="margin-top: 24px;"></div>
+        </div>
+    </div>
+
+    <!-- GAD-7 Modal -->
+    <div class="modal-overlay" id="gadModal" onclick="if(event.target===this)closeModal('gadModal')">
+        <div class="modal" style="max-width:580px;">
+            <h2><span data-i18n="gad_modal_title">GAD-7 &mdash; 焦虑症状筛查</span> <button class="close"
+                    onclick="closeModal('gadModal')"><i data-lucide="x" style="width:20px"></i></button></h2>
+            <p style="color:var(--gray);font-size:13px;margin-bottom:20px;" data-i18n="gad_modal_desc">过去两周内，以下问题困扰你的频率是多少？</p>
+            <form id="gadForm" onsubmit="submitGAD(event)">
+                <div id="gadQuestions"></div>
+                <button type="submit" class="btn-primary static-accent" style="margin-top:8px;" data-i18n="get_result">查看结果</button>
+            </form>
+            <div id="gadResult"
+                style="display:none; margin-top:20px; padding:20px; border-radius:12px; border:1px solid var(--border); background:var(--bg);">
+            </div>
+        </div>
+    </div>
+
+    <!-- Rosenberg Self-Esteem Modal -->
+    <div class="modal-overlay" id="esteemModal" onclick="if(event.target===this)closeModal('esteemModal')">
+        <div class="modal" style="max-width:580px;">
+            <h2><span data-i18n="esteem_modal_title">Rosenberg 自尊量表</span> <button class="close"
+                    onclick="closeModal('esteemModal')"><i data-lucide="x" style="width:20px"></i></button></h2>
+            <p style="color:var(--gray);font-size:13px;margin-bottom:20px;" data-i18n="esteem_modal_desc">以下描述与你目前的情况有多符合？</p>
+            <form id="esteemForm" onsubmit="submitEsteem(event)">
+                <div id="esteemQuestions"></div>
+                <button type="submit" class="btn-primary static-accent" style="margin-top:8px;" data-i18n="get_result">查看结果</button>
+            </form>
+            <div id="esteemResult"
+                style="display:none; margin-top:20px; padding:20px; border-radius:12px; border:1px solid var(--border); background:var(--bg);">
+            </div>
+        </div>
+    </div>
+    <!-- Sleep Diary History Modal -->
+    <div class="modal-overlay" id="sleepHistModal" onclick="if(event.target===this)closeModal('sleepHistModal')">
+        <div class="modal" style="max-width: 840px; padding: 24px 24px 0 24px; overflow: hidden;">
+            <h2 style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="display:flex; align-items:center; gap:8px;">
+                    <i data-lucide="moon" style="width:18px; color:var(--accent);"></i>
+                    <span data-i18n="sleep_history_title">睡眠日志</span>
+                </span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="suggest-btn entry-btn" onclick="closeModal('sleepHistModal'); openSleepEntryModal();"
+                        title="新建记录" data-i18n-title="new_entry">
+                        <i data-lucide="plus" style="width:14px;"></i> <span data-i18n="new_entry">新建记录</span>
+                    </button>
+                    <button class="close" onclick="closeModal('sleepHistModal')"><i data-lucide="x"
+                            style="width:20px"></i></button>
+                </div>
+            </h2>
+            <div id="sleepHistContent" style="margin-top: 24px;"></div>
+        </div>
+    </div>
+
+    <!-- Sleep Diary Add Modal -->
+    <div class="modal-overlay" id="sleepModal" onclick="if(event.target===this)closeModal('sleepModal')">
+        <div class="modal" style="max-width:480px;">
+            <h2><span id="sleepModalTitle" data-i18n="sleep_add_title">添加睡眠记录</span> <button class="close" onclick="closeModal('sleepModal')"><i
+                        data-lucide="x" style="width:20px"></i></button></h2>
+            <form onsubmit="submitSleep(event)">
+                <div style="display:flex;gap:16px;">
+                    <div class="fg" style="flex:1;"><label data-i18n="sleep_bedtime">入睡时间</label><input type="time" id="slBed" required
+                            value="23:00"></div>
+                    <div class="fg" style="flex:1;"><label data-i18n="sleep_wake">起床时间</label><input type="time" id="slWake" required
+                            value="07:00"></div>
+                </div>
+                <div class="fg"><label data-i18n="sleep_awake_count">夜间醒来次数</label>
+                    <input type="number" id="slAwk" min="0" max="20" value="0" placeholder="0">
+                </div>
+                <div class="fg"><label data-i18n="sleep_quality">睡眠质量（0 = 很差，10 = 很好）</label>
+                    <input type="range" id="slQual" min="0" max="10" value="6"
+                        style="width:100%; height:4px; border-radius:4px; margin: 10px 0; accent-color: var(--accent);"
+                        oninput="document.getElementById('slQualLabel').innerText = this.value">
+                    <div style="text-align:center;font-size:24px;font-weight:600;color:var(--accent);margin-top:2px;"
+                        id="slQualLabel">6</div>
+                </div>
+                <div class="fg"><label data-i18n="sleep_notes">备注</label><textarea id="slNotes" rows="2"
+                        placeholder="有什么可能影响了你的睡眠？" data-i18n-placeholder="sleep_notes_placeholder"></textarea></div>
+                <button type="submit" class="btn-primary static-accent" id="sleepSubmitBtn" style="margin-top:10px;" data-i18n="save_entry">保存记录</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SOS Modal -->
+    <div class="modal-overlay" id="sosModal" onclick="if(event.target===this)closeModal('sosModal')">
+        <div class="modal" style="text-align: center;">
+            <h2><span style="color:var(--text)" data-i18n="sos_title">紧急调节工具（SOS）</span> <button class="close"
+                    onclick="closeModal('sosModal')"><i data-lucide="x" style="width:20px"></i></button></h2>
+
+            <!-- Tabs -->
+            <script>
+                var sosHints = [
+                    '如果你正在感到紧张或恐慌，可以先慢慢调整呼吸。',
+                    '',
+                    '',
+                    ''
+                ];
+                function switchSos(n) {
+                    var count = 4;
+                    for (var i = 0; i < count; i++) {
+                        var pane = document.getElementById('sosPane' + i);
+                        var tab = document.getElementById('sosTab' + i);
+                        if (pane) pane.style.display = (i === n) ? 'block' : 'none';
+                        if (tab) {
+                            tab.classList.toggle('active', i === n);
+                        }
+                    }
+                    var hint = document.getElementById('sosHint');
+                    if (hint) {
+                        var hintText = sosHints[n] || '';
+                        hint.innerText = hintText;
+                        hint.style.display = hintText ? 'block' : 'none';
+                    }
+                    if (window.stopBreathing) stopBreathing();
+                    if (window.lucide) lucide.createIcons();
+                }
+                function pickBreathe(idx) {
+                    if (window.stopBreathing) stopBreathing();
+                    window._breatheIdx = idx;
+                    var c = document.getElementById('breatheTypes');
+                    if (!c) return;
+                    var btns = c.getElementsByTagName('button');
+                    for (var j = 0; j < btns.length; j++) {
+                        btns[j].classList.toggle('active', j === idx);
+                    }
+                    if (window.setBreatheType) window.setBreatheType(idx);
+                }
+            </script>
+            <div id="sosTabBody">
+                <div style="display:flex; gap:8px; justify-content:center; margin-bottom:16px;">
+                    <button id="sosTab0" class="sos-pill active" onclick="switchSos(0)">
+                        <i data-lucide="wind" style="width:14px;"></i> <span data-i18n="sos_tab_breathing">呼吸</span></button>
+                    <button id="sosTab1" class="sos-pill" onclick="switchSos(1)">
+                        <i data-lucide="eye" style="width:14px;"></i> <span data-i18n="sos_tab_grounding">着地练习</span></button>
+                    <button id="sosTab2" class="sos-pill" onclick="switchSos(2)">
+                        <i data-lucide="activity" style="width:14px;"></i> <span data-i18n="sos_tab_muscles">肌肉放松</span></button>
+                    <button id="sosTab3" class="sos-pill" onclick="switchSos(3)">
+                        <i data-lucide="hand" style="width:14px;"></i> <span data-i18n="sos_tab_stop">STOP</span></button>
+                </div>
+
+                <!-- Pane 0: Breathing -->
+                <div id="sosPane0">
+                    <div class="sos-pane-card" style="padding: 20px; text-align:left;">
+                        <h3 id="breathePaneTitle" style="margin-bottom: 8px; font-size: 15px; display:flex; align-items:center;">呼吸练习</h3>
+                        <p id="breathePaneDesc" style="font-size:12px; color:var(--gray); margin-bottom:12px; line-height:1.5;">请选择一种更适合你当前状态的呼吸节奏。</p>
+                        <p id="sosHint"
+                            style="color:var(--gray); font-size:12px; margin:0 0 16px; text-align: left; line-height:1.5;">
+                            如果你正在感到紧张或恐慌，可以先慢慢调整呼吸。</p>
+                        <div id="breatheTypes"
+                            style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;">
+                            <button class="breathe-option active" onclick="pickBreathe(0)">
+                                <span style="font-size:18px; flex-shrink:0; width:22px; text-align:center;">■</span>
+                                <span>方形呼吸 4-4-4-4<br><span style="font-weight:400; font-size:11px;">帮助稳定呼吸与情绪</span></span>
+                            </button>
+                            <button class="breathe-option" onclick="pickBreathe(1)">
+                                <span style="font-size:18px; flex-shrink:0; width:22px; text-align:center;">☽</span>
+                                <span>4-7-8 呼吸<br><span style="font-weight:400; font-size:11px;">帮助放松并为睡眠做准备</span></span>
+                            </button>
+                            <button class="breathe-option" onclick="pickBreathe(2)">
+                                <span style="font-size:18px; flex-shrink:0; width:22px; text-align:center;">❤</span>
+                                <span>舒缓呼吸 4-6<br><span style="font-weight:400; font-size:11px;">延长呼气，帮助身体放松</span></span>
+                            </button>
+                        </div>
+                        <button class="btn-primary" id="btnBreathe" onclick="openBreatheScreen()"
+                            style="background:var(--accent); color:#ffffff;" data-i18n="start_exercise">开始练习</button>
+                    </div>
+                </div>
+
+                <!-- Pane 1: Grounding -->
+                <div id="sosPane1" style="display:none;">
+                    <div class="sos-pane-card sos-pane-card--ground"
+                        style="padding: 20px; text-align:left;">
+                        <h3 id="groundPaneTitle" style="margin-bottom: 8px; font-size: 15px; display:flex; align-items:center;">5-4-3-2-1 感官着陆</h3>
+                        <p id="groundPaneDesc" style="font-size:12px; color:var(--gray); margin-bottom:16px; line-height:1.5;">通过逐步关注周围环境，帮助自己重新回到此时此刻。</p>
+                        <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:16px;">
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span
+                                    style="font-size:20px; font-weight:500; color:var(--accent); width:24px; text-align:center;">5</span>
+                                <span id="groundPaneItem0" style="font-size:12px; color:var(--text);">你能看到的东西</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span
+                                    style="font-size:20px; font-weight:500; color:var(--accent); width:24px; text-align:center;">4</span>
+                                <span id="groundPaneItem1" style="font-size:12px; color:var(--text);">你能触碰到的东西</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span
+                                    style="font-size:20px; font-weight:500; color:var(--accent); width:24px; text-align:center;">3</span>
+                                <span id="groundPaneItem2" style="font-size:12px; color:var(--text);">你能听到的声音</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span
+                                    style="font-size:20px; font-weight:500; color:var(--accent); width:24px; text-align:center;">2</span>
+                                <span id="groundPaneItem3" style="font-size:12px; color:var(--text);">你能闻到的气味</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span
+                                    style="font-size:20px; font-weight:500; color:var(--accent); width:24px; text-align:center;">1</span>
+                                <span id="groundPaneItem4" style="font-size:12px; color:var(--text);">关于自己的一件好事</span>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="openGroundScreen()"
+                            style="background:var(--accent); color:#fff;" data-i18n="start_exercise">开始练习</button>
+                    </div>
+                </div>
+
+                <!-- Pane 2: PMR -->
+                <div id="sosPane2" style="display:none;">
+                    <div class="sos-pane-card sos-pane-card--pmr"
+                        style="padding: 20px; text-align:left;">
+                        <h3 id="pmrPaneTitle" style="margin-bottom: 8px; font-size: 15px;">渐进式肌肉放松</h3>
+                        <p id="pmrPaneDesc" style="font-size:12px; color:var(--gray); margin-bottom:16px; line-height:1.5;">依次绷紧并放松不同肌肉群，帮助减轻身体紧张。</p>
+                        <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:16px;">
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span style="width:24px; text-align:center; color:var(--accent); flex-shrink:0;"><i
+                                        data-lucide="smile" style="width:16px;"></i></span>
+                                <span id="pmrPaneItem0" style="font-size:12px; color:var(--text);">面部——绷紧并放松</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span style="width:24px; text-align:center; color:var(--accent); flex-shrink:0;"><i
+                                        data-lucide="chevrons-up" style="width:16px;"></i></span>
+                                <span id="pmrPaneItem1" style="font-size:12px; color:var(--text);">肩膀和颈部</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span style="width:24px; text-align:center; color:var(--accent); flex-shrink:0;"><i
+                                        data-lucide="grab" style="width:16px;"></i></span>
+                                <span id="pmrPaneItem2" style="font-size:12px; color:var(--text);">手臂和双手</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span style="width:24px; text-align:center; color:var(--accent); flex-shrink:0;"><i
+                                        data-lucide="heart" style="width:16px;"></i></span>
+                                <span id="pmrPaneItem3" style="font-size:12px; color:var(--text);">腹部和胸部</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span style="width:24px; text-align:center; color:var(--accent); flex-shrink:0;"><i
+                                        data-lucide="footprints" style="width:16px;"></i></span>
+                                <span id="pmrPaneItem4" style="font-size:12px; color:var(--text);">双腿和双脚</span>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="openPmrScreen()"
+                            style="background:var(--accent); color:#fff;" data-i18n="start_exercise">开始练习</button>
+                    </div>
+                </div>
+
+                <!-- Pane 3: STOP -->
+                <div id="sosPane3" style="display:none;">
+                    <div class="sos-pane-card sos-pane-card--stop"
+                        style="padding: 20px; text-align:left;">
+                        <h3 id="stopPaneTitle" style="margin-bottom: 8px; font-size: 15px;">STOP 技巧</h3>
+                        <p id="stopPaneDesc" style="font-size:12px; color:var(--gray); margin-bottom:16px; line-height:1.5;">一个简单的四步练习，帮助打断焦虑和反复思考。</p>
+                        <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:16px;">
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span id="stopPaneLetter0"
+                                    style="font-size:20px; font-weight:500; color:var(--accent); width:24px; text-align:center;">S</span>
+                                <span id="stopPaneItem0" style="font-size:12px; color:var(--text);">S：停下来</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span id="stopPaneLetter1"
+                                    style="font-size:20px; font-weight:500; color:var(--accent); width:24px; text-align:center;">T</span>
+                                <span id="stopPaneItem1" style="font-size:12px; color:var(--text);">T：做一次呼吸</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span id="stopPaneLetter2"
+                                    style="font-size:20px; font-weight:500; color:var(--accent); width:24px; text-align:center;">O</span>
+                                <span id="stopPaneItem2" style="font-size:12px; color:var(--text);">O：观察</span>
+                            </div>
+                            <div
+                                style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--panel); border-radius:10px; border:1px solid var(--border);">
+                                <span id="stopPaneLetter3"
+                                    style="font-size:20px; font-weight:500; color:var(--accent); width:24px; text-align:center;">P</span>
+                                <span id="stopPaneItem3" style="font-size:12px; color:var(--text);">P：继续行动</span>
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="openStopScreen()"
+                            style="background:var(--accent); color:#fff;" data-i18n="start_exercise">开始练习</button>
+                    </div>
+                </div>
+
+            </div> <!-- /sosTabBody -->
+
+        </div>
+    </div>
+
+    <!-- Notification Settings Modal -->
+    <div class="modal-overlay" id="notifModal" onclick="if(event.target===this)closeModal('notifModal')">
+        <div class="modal" style="max-width:420px;">
+            <h2><span style="display:flex;align-items:center;gap:8px;"><i data-lucide="settings-2"
+                        style="width:18px;color:var(--accent);"></i> <span data-i18n="settings_title">设置</span></span>
+                <button class="close" onclick="closeModal('notifModal')"><i data-lucide="x"
+                        style="width:20px"></i></button>
+            </h2>
+            <div class="settings-section">
+                <div class="settings-section-label" data-i18n="language_title">语言</div>
+                <div class="settings-lang-row">
+                    <button
+                        type="button"
+                        class="settings-lang-btn"
+                        id="settingsLangRu"
+                        onclick="setLanguage('ru')">
+                        <span class="settings-lang-emoji" aria-hidden="true">🇷🇺</span>
+                        <span data-i18n="language_ru">俄语</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="settings-lang-btn"
+                        id="settingsLangEn"
+                        onclick="setLanguage('en')">
+                        <span class="settings-lang-emoji" aria-hidden="true">🇬🇧</span>
+                        <span data-i18n="language_en">英语</span>
+                    </button>
+
+                    <button
+                    type="button"
+                    class="settings-lang-btn"
+                    id="settingsLangZh"
+                    onclick="setLanguage('zh')">
+                    <span class="settings-lang-emoji" aria-hidden="true">🇨🇳</span>
+                    <span data-i18n="language_zh">中文</span>
+                    </button>
+                </div>
+                </div>
+            <div class="settings-section">
+                <div class="settings-section-label" data-i18n="tts_settings_title">语音设置</div>
+<div class="settings-voice-grid">
+    <div class="settings-field">
+        <label class="settings-field-label" for="ttsVoiceRu" data-i18n="tts_voice_ru_label">
+            俄语语音
+        </label>
+
+        <div class="settings-field-row">
+            <select id="ttsVoiceRu" class="settings-select"></select>
+
+            <button
+                type="button"
+                class="settings-preview-btn"
+                onclick="previewTtsVoice('ru')"
+                data-i18n="tts_preview">
+                试听
+            </button>
+        </div>
+    </div>
+
+    <div class="settings-field">
+        <label class="settings-field-label" for="ttsVoiceEn" data-i18n="tts_voice_en_label">
+            英语语音
+        </label>
+
+        <div class="settings-field-row">
+            <select id="ttsVoiceEn" class="settings-select"></select>
+
+            <button
+                type="button"
+                class="settings-preview-btn"
+                onclick="previewTtsVoice('en')"
+                data-i18n="tts_preview">
+                试听
+            </button>
+        </div>
+    </div>
+
+    <div class="settings-field">
+        <label class="settings-field-label" for="ttsVoiceZh" data-i18n="tts_voice_zh_label">
+            中文语音
+        </label>
+
+        <div class="settings-field-row">
+            <select id="ttsVoiceZh" class="settings-select"></select>
+
+            <button
+                type="button"
+                class="settings-preview-btn"
+                onclick="previewTtsVoice('zh')"
+                data-i18n="tts_preview">
+                试听
+            </button>
+        </div>
+    </div>
+</div>
+            </div>
+            <div class="settings-section">
+                <div class="settings-section-label" data-i18n="reminders_title">提醒</div>
+                <p style="font-size:13px; color:var(--gray); margin:10px 0 20px; line-height:1.5;" data-i18n="reminders_desc">浏览器可以提醒你记录情绪或进行练习。使用提醒时请保持网页开启。</p>
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                    <div
+                        style="display:flex; align-items:center; gap:12px; padding:14px; background:var(--bg); border:1px solid var(--border); border-radius:10px;">
+                        <label style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;">
+                            <input type="checkbox" id="notifMorning"
+                                style="accent-color:var(--accent); width:16px; height:16px;">
+                            <span style="font-size:14px;display:flex;align-items:center;gap:6px;"><i data-lucide="sunrise"
+                                    style="width:15px;color:var(--gray);"></i> <span data-i18n="reminders_morning">早晨提醒</span></span>
+                        </label>
+                        <input type="time" id="notifMorningTime" value="09:00"
+                            style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:13px; background:var(--panel); color:var(--text); outline:none;">
+                    </div>
+                    <div
+                        style="display:flex; align-items:center; gap:12px; padding:14px; background:var(--bg); border:1px solid var(--border); border-radius:10px;">
+                        <label style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;">
+                            <input type="checkbox" id="notifEvening"
+                                style="accent-color:var(--accent); width:16px; height:16px;">
+                            <span style="font-size:14px;display:flex;align-items:center;gap:6px;"><i data-lucide="moon"
+                                    style="width:15px;color:var(--gray);"></i> <span data-i18n="reminders_evening">晚间提醒</span></span>
+                        </label>
+                        <input type="time" id="notifEveningTime" value="21:00"
+                            style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:13px; background:var(--panel); color:var(--text); outline:none;">
+                    </div>
+                </div>
+            </div>
+            <button class="btn-primary static-accent" onclick="saveNotifSettings()" style="margin-top:20px;" data-i18n="save">保存</button>
+        </div>
+    </div>
+
+    <script src="js/api.js?v=2"></script>
+    <script src="js/security.js?v=1"></script>
+
+    <!-- Article Library Modal -->
+    <div class="modal-overlay" id="articleModal" onclick="if(event.target===this)closeArticleLibraryModal()">
+        <div class="modal article-modal">
+            <h2 class="library-modal-head">
+                <span class="library-modal-title">
+                    <i data-lucide="book-open" style="width:18px; color:var(--text);"></i>
+                    <span data-i18n="article_library_title">文章库</span>
+                </span>
+                <button class="close" onclick="closeArticleLibraryModal()"><i data-lucide="x"
+                        style="width:20px"></i></button>
+            </h2>
+
+            <div id="articleListContainer">
+                <p class="library-modal-subtitle" data-i18n="article_library_subtitle">关于 CBT、焦虑、情绪管理和自助方法的资料。</p>
+                <div id="articleListGrid" class="library-list-grid"></div>
+            </div>
+
+            <div id="articleReaderContainer" style="display:none;">
+                <button onclick="closeArticleReader()" class="library-back-btn"><i data-lucide="arrow-left"
+                        style="width:16px;"></i> <span data-i18n="back_to_list">返回列表</span></button>
+                <div class="article-reader">
+                    <div class="article-reader-meta">
+                        <div id="articleReaderKicker" class="article-reader-kicker"></div>
+                        <div id="articleReaderSources" class="article-reader-sources"></div>
+                    </div>
+                    <h3 id="articleReaderTitle" class="article-reader-title"></h3>
+                    <div id="articleReaderBody" class="article-reader-body"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Library Modal -->
+    <div class="modal-overlay" id="videoModal" onclick="if(event.target===this)closeVideoLibraryModal()">
+        <div class="modal" style="max-width:600px; padding: 24px;">
+            <h2
+                style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:16px; margin-bottom:16px;">
+                <span style="display:flex; align-items:center; gap:8px;">
+                    <i data-lucide="play-circle" style="width:18px; color:var(--text);"></i>
+                    <span data-i18n="video_library_title">视频库</span>
+                </span>
+                <button class="close" onclick="closeVideoLibraryModal()"
+                    style="background:none; border:none; cursor:pointer; color:var(--gray)"><i data-lucide="x"
+                        style="width:20px"></i></button>
+            </h2>
+            <div id="videoListContainer">
+                <p style="font-size:13px; color:var(--gray); margin-bottom: 20px; line-height:1.5;" data-i18n="video_library_subtitle">关于焦虑、情绪管理以及相关练习的视频资料。</p>
+                <div id="videoListGrid"
+                    style="display:grid; grid-template-columns:1fr; gap:16px; max-height: 60vh; overflow-y:auto; padding-right:10px;">
+                    <!-- Javascript will render videos here -->
+                </div>
+            </div>
+
+            <div id="videoPlayerContainer" style="display:none; width:100%;">
+                <button onclick="closeVideoPlayer()"
+                    style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); cursor:pointer; font-size:13px; font-weight:500; margin-bottom:16px; display:inline-flex; align-items:center; gap:6px;"><i
+                        data-lucide="arrow-left" style="width:16px;"></i> <span data-i18n="back_to_list">返回列表</span></button>
+                <div
+                    style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius:12px; background:#000;">
+                    <iframe id="videoIframe" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
+                        src="" title="YouTube 视频播放器" frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Download Format Modal -->
+    <div class="modal-overlay" id="downloadModal" onclick="if(event.target===this)closeModal('downloadModal')">
+        <div class="modal" style="max-width:420px; padding:28px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <h2 style="margin:0;display:flex;align-items:center;gap:8px;">
+                    <i data-lucide="download" style="width:20px;color:var(--accent)"></i> <span data-i18n="download_title">导出记录</span>
+                </h2>
+                <button class="close" onclick="closeModal('downloadModal')"><i data-lucide="x"
+                        style="width:20px"></i></button>
+            </div>
+            <p style="color:var(--gray);font-size:13px;margin:0 0 20px;" data-i18n="download_desc">请选择导出格式</p>
+            <div style="display:flex;gap:12px;">
+                <button onclick="downloadAsPDF()"
+                    style="flex:1;border:1.5px solid var(--accent);background:var(--accent-light);border-radius:12px;padding:20px 12px;cursor:pointer;text-align:center;transition:all 0.2s;"
+                    onmouseover="this.style.background='var(--accent)';this.style.color='#fff'"
+                    onmouseout="this.style.background='var(--accent-light)';this.style.color=''">
+                    <i data-lucide="file-text"
+                        style="width:28px;display:block;margin:0 auto 8px;color:var(--accent)"></i>
+                    <div style="font-weight:600;font-size:14px;margin-bottom:4px;">PDF</div>
+                    <div style="font-size:11px;color:var(--gray);" data-i18n-html="download_pdf_desc">PDF 报告<br>包含图表</div>
+                </button>
+                <button onclick="downloadAsTXT()"
+                    style="flex:1;border:1.5px solid var(--border);background:var(--panel);border-radius:12px;padding:20px 12px;cursor:pointer;text-align:center;transition:all 0.2s;"
+                    onmouseover="this.style.borderColor='var(--gray)'"
+                    onmouseout="this.style.borderColor='var(--border)'">
+                    <i data-lucide="file" style="width:28px;display:block;margin:0 auto 8px;color:var(--gray)"></i>
+                    <div style="font-weight:600;font-size:14px;margin-bottom:4px;">TXT</div>
+                    <div style="font-size:11px;color:var(--gray);" data-i18n-html="download_txt_desc">文本文件<br>包含所有记录</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/ui.js?v=20"></script>
+    <script src="js/report.js?v=2"></script>
+    <script src="js/chat_manager.js?v=6"></script>
+    <script src="js/cbt_tools.js?v=14"></script>
+    <script src="js/main.js?v=5"></script>
+
+    <!-- Fullscreen PMR Overlay -->
+    <div id="pmrOverlay" class="pmr-overlay" style="display:none;">
+        <button onclick="closePmrScreen()"
+            style="position:absolute; top:24px; right:24px; background:none; border:none; color:rgba(255,255,255,0.6); cursor:pointer; font-size:28px; z-index:10; line-height:1;">×</button>
+        <div class="pmr-scene">
+            <div class="pmr-step-num" id="pmrStepNum">1</div>
+            <div class="pmr-muscle" id="pmrMuscle">面部</div>
+            <div class="pmr-phase" id="pmrPhase">绷紧</div>
+            <div class="pmr-instruction" id="pmrInstruction">轻轻绷紧面部肌肉：闭紧眼睛、皱眉并咬紧下颌
+            </div>
+            <div class="pmr-timer" id="pmrTimer">5</div>
+            <div class="pmr-progress">
+                <div class="pmr-dot active"></div>
+                <div class="pmr-dot"></div>
+                <div class="pmr-dot"></div>
+                <div class="pmr-dot"></div>
+                <div class="pmr-dot"></div>
+            </div>
+            <button class="pmr-next-btn" id="pmrNextBtn" onclick="pmrNext()" data-i18n="skip_arrow">跳过 →</button>
+        </div>
+    </div>
+
+    <!-- Fullscreen STOP Overlay -->
+    <div id="stopOverlay" class="stop-overlay" style="display:none;">
+        <button onclick="closeStopScreen()" class="sos-fullscreen-close">×</button>
+        <div class="stop-scene">
+            <div class="stop-letter" id="stopLetter">S</div>
+            <div class="stop-word" id="stopWord">Stop 停下来</div>
+            <div class="stop-instruction" id="stopInstruction">先停一下，暂时不要继续跟着当前的想法往下走。</div>
+            <div class="stop-progress">
+                <div class="stop-dot active"></div>
+                <div class="stop-dot"></div>
+                <div class="stop-dot"></div>
+                <div class="stop-dot"></div>
+            </div>
+            <button class="stop-next-btn" id="stopNextBtn" onclick="stopNext()" data-i18n="done_arrow">完成 →</button>
+        </div>
+    </div>
+
+    <!-- Fullscreen Grounding Overlay -->
+    <div id="groundOverlay" class="ground-overlay" style="display:none;">
+        <button onclick="closeGroundScreen()" class="sos-fullscreen-close">×</button>
+        <div class="ground-scene">
+            <div class="ground-number" id="groundNumber">5</div>
+            <div class="ground-sense" id="groundSense">视觉</div>
+            <div class="ground-instruction" id="groundInstruction">说出你现在能看到的 5 样东西</div>
+            <div class="ground-progress" id="groundProgress">
+                <div class="ground-dot active"></div>
+                <div class="ground-dot"></div>
+                <div class="ground-dot"></div>
+                <div class="ground-dot"></div>
+                <div class="ground-dot"></div>
+            </div>
+            <button class="ground-next-btn" id="groundNextBtn" onclick="groundNext()" data-i18n="done_arrow">完成 →</button>
+        </div>
+    </div>
+
+    <!-- Fullscreen Breathing Overlay (Premium Petal) -->
+    <div id="breatheOverlay" class="breathe-overlay" style="display:none;">
+        <!-- Ambient background -->
+        <div class="breathe-bg-glow"></div>
+        <!-- Floating particles -->
+        <div class="breathe-particles" id="breatheParticles"></div>
+        <!-- Close button -->
+        <button onclick="closeBreatheScreen()" class="breathe-close-btn" aria-label="关闭">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+        </button>
+        <div class="breathe-scene">
+            <!-- Portal ring container -->
+            <div class="breathe-portal" id="breatheFlower">
+                <div class="breathe-portal-ring"></div>
+            </div>
+            <!-- Text overlay on top of flower -->
+            <div class="breathe-text-overlay" id="breatheTextOverlay">
+                <span id="breathePhase" class="breathe-phase-text" data-i18n="breathe_phase">呼吸</span>
+                <span id="breatheTimer" class="breathe-timer-text"></span>
+            </div>
+            <!-- Info below -->
+            <div class="breathe-info">
+                <span id="breatheCycleCount" class="breathe-cycle" data-i18n="cycle_one">第1轮</span>
+                <p id="breatheHint" class="breathe-hint" data-i18n="follow_circle">跟随圆圈进行呼吸</p>
+                <p id="breatheTip" class="breathe-tip"></p>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
