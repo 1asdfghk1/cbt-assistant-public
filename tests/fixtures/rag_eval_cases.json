@@ -1,0 +1,202 @@
+[
+  {
+    "id": "cbt_automatic_thoughts",
+    "query": "什么是自动化思维？",
+    "concept": "automatic_thoughts",
+    "expected_sources": ["cbt_clinical_guide.md"],
+    "expected_keywords": ["Автоматическая мысль", "автоматических мыслей"],
+    "should_retrieve": true,
+    "category": "cbt_core"
+  },
+  {
+    "id": "cbt_cognitive_restructuring",
+    "query": "什么是认知重构？",
+    "concept": "cognitive_restructuring",
+    "expected_sources": ["cbt_clinical_guide.md", "cbt_anxiety_protocols.md"],
+    "expected_keywords": ["Когнитивная реструктуризация"],
+    "should_retrieve": true,
+    "category": "cbt_core"
+  },
+  {
+    "id": "cbt_catastrophizing",
+    "query": "什么是灾难化思维？",
+    "concept": "catastrophizing",
+    "expected_sources": ["cbt_clinical_guide.md", "cbt_anxiety_protocols.md", "cbt_insomnia_protocols.md"],
+    "expected_keywords": ["Катастрофизация", "катастрофизации"],
+    "should_retrieve": true,
+    "category": "cbt_core"
+  },
+  {
+    "id": "cbt_triangle",
+    "query": "什么是认知三角？",
+    "concept": "cognitive_triangle",
+    "expected_sources": ["cbt_clinical_guide.md"],
+    "expected_keywords": ["мысли влияют на эмоции и поведение"],
+    "should_retrieve": true,
+    "category": "cbt_core"
+  },
+  {
+    "id": "cbt_thought_record",
+    "query": "如何记录自动化思维？",
+    "concept": "thought_record",
+    "expected_sources": ["cbt_clinical_guide.md"],
+    "expected_keywords": ["Дневник мыслей", "Запись мыслей"],
+    "should_retrieve": true,
+    "category": "cbt_core"
+  },
+  {
+    "id": "cbt_distortions",
+    "query": "常见的认知偏差有哪些？",
+    "concept": "cognitive_distortions",
+    "expected_sources": ["cbt_clinical_guide.md", "cbt_anxiety_protocols.md"],
+    "expected_keywords": ["КОГНИТИВНЫЕ ИСКАЖЕНИЯ", "когнитивных искажений"],
+    "should_retrieve": true,
+    "category": "cbt_core"
+  },
+  {
+    "id": "cbt_behavioral_experiment",
+    "query": "CBT 中什么是行为实验？",
+    "concept": "behavioral_experiment",
+    "expected_sources": ["cbt_clinical_guide.md"],
+    "expected_keywords": ["Поведенческие эксперименты"],
+    "should_retrieve": true,
+    "category": "cbt_core"
+  },
+  {
+    "id": "cbt_problem_solving",
+    "query": "CBT 怎样训练解决问题？",
+    "concept": "problem_solving",
+    "expected_sources": ["cbt_clinical_guide.md", "cbt_anxiety_protocols.md"],
+    "expected_keywords": ["Решение проблем", "решения проблем"],
+    "should_retrieve": true,
+    "category": "cbt_core"
+  },
+  {
+    "id": "sleep_mood",
+    "query": "睡眠为什么会影响情绪？",
+    "concept": "sleep_mood",
+    "expected_sources": ["cbt_clinical_guide.md", "cbt_insomnia_protocols.md"],
+    "expected_keywords": ["Сон и депрессия", "бессон"],
+    "should_retrieve": true,
+    "category": "sleep"
+  },
+  {
+    "id": "sleep_anxiety",
+    "query": "失眠和焦虑有什么关系？",
+    "concept": "insomnia_anxiety",
+    "expected_sources": ["cbt_insomnia_protocols.md", "cbt_anxiety_protocols.md"],
+    "expected_keywords": ["бессон", "тревог"],
+    "should_retrieve": true,
+    "category": "sleep"
+  },
+  {
+    "id": "sleep_stimulus_control",
+    "query": "失眠的刺激控制法是什么？",
+    "concept": "stimulus_control",
+    "expected_sources": ["cbt_insomnia_protocols.md"],
+    "expected_keywords": ["Контроль стимулов"],
+    "should_retrieve": true,
+    "category": "sleep"
+  },
+  {
+    "id": "sleep_restriction",
+    "query": "CBT-I 的睡眠限制法是什么？",
+    "concept": "sleep_restriction",
+    "expected_sources": ["cbt_insomnia_protocols.md"],
+    "expected_keywords": ["Ограничение сна", "Рестрикция сна"],
+    "should_retrieve": true,
+    "category": "sleep"
+  },
+  {
+    "id": "behavior_activation",
+    "query": "什么是行为激活？",
+    "concept": "behavioral_activation",
+    "expected_sources": ["cbt_clinical_guide.md"],
+    "expected_keywords": ["Поведенческая активация"],
+    "should_retrieve": true,
+    "category": "behavior_activation"
+  },
+  {
+    "id": "behavior_small_steps",
+    "query": "为什么抑郁时建议从小活动开始？",
+    "concept": "small_steps",
+    "expected_sources": ["cbt_clinical_guide.md"],
+    "expected_keywords": ["маленьких, достижимых шагов"],
+    "should_retrieve": true,
+    "category": "behavior_activation"
+  },
+  {
+    "id": "behavior_activity_mood",
+    "query": "活动和情绪之间有什么关系？",
+    "concept": "activity_mood",
+    "expected_sources": ["cbt_clinical_guide.md"],
+    "expected_keywords": ["активность", "настроение"],
+    "should_retrieve": true,
+    "category": "behavior_activation"
+  },
+  {
+    "id": "skill_mindfulness",
+    "query": "正念在 CBT 中有什么作用？",
+    "concept": "mindfulness",
+    "expected_sources": ["cbt_psychological_skills.md", "cbt_clinical_guide.md", "cbt_anxiety_protocols.md"],
+    "expected_keywords": ["ОСОЗНАННОСТЬ", "Mindfulness"],
+    "should_retrieve": true,
+    "category": "cbt_core"
+  },
+  {
+    "id": "ood_france",
+    "query": "法国首都在哪里？",
+    "should_retrieve": false,
+    "category": "out_of_domain"
+  },
+  {
+    "id": "ood_python",
+    "query": "Python list 和 tuple 有什么区别？",
+    "should_retrieve": false,
+    "category": "out_of_domain"
+  },
+  {
+    "id": "ood_recipe",
+    "query": "怎么烤巧克力蛋糕？",
+    "should_retrieve": false,
+    "category": "out_of_domain"
+  },
+  {
+    "id": "ood_weather",
+    "query": "明天上海天气怎么样？",
+    "should_retrieve": false,
+    "category": "out_of_domain"
+  },
+  {
+    "id": "personal_gad",
+    "query": "我最近的 GAD-7 是多少？",
+    "should_retrieve": false,
+    "should_use_tool": true,
+    "expected_tool": "get_user_test_results",
+    "category": "personal_data"
+  },
+  {
+    "id": "personal_phq",
+    "query": "我的 PHQ-9 得分是多少？",
+    "should_retrieve": false,
+    "should_use_tool": true,
+    "expected_tool": "get_user_test_results",
+    "category": "personal_data"
+  },
+  {
+    "id": "personal_sleep",
+    "query": "我最近睡了多久？",
+    "should_retrieve": false,
+    "should_use_tool": true,
+    "expected_tool": "get_user_sleep_history",
+    "category": "personal_data"
+  },
+  {
+    "id": "personal_activities",
+    "query": "我最近记录了哪些活动？",
+    "should_retrieve": false,
+    "should_use_tool": true,
+    "expected_tool": "get_user_activities",
+    "category": "personal_data"
+  }
+]
