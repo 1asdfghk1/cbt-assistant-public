@@ -21,14 +21,14 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from backend.settings import CONFIG_DIR, load_model_settings  # noqa: E402
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from fastapi.responses import FileResponse, PlainTextResponse, Response  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from starlette.middleware.trustedhost import TrustedHostMiddleware  # noqa: E402
 from pydantic import BaseModel, Field, field_validator  # noqa: E402
 from src.llm.deepseek_client import DeepSeekClient  # noqa: E402
 from src.llm.errors import LLMError  # noqa: E402
 from src.llm.ollama_client import ContentCleaner, OllamaClient  # noqa: E402
-from src.utils.db import SQLiteSessionManager  # noqa: E402
+from src.utils.db import SessionClearedError, SQLiteSessionManager  # noqa: E402
 from src.rag import RAGService, RAGSettings  # noqa: E402
 from src.prompts.templates import PromptManager  # noqa: E402
 from src.memory import MemoryService, MemorySettings  # noqa: E402
@@ -127,13 +127,21 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=list(APP_ALLOWED_ORIGINS),
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=["127.0.0.1", "localhost", "[::1]", "testserver"],
 )
+
+
+@app.exception_handler(SessionClearedError)
+async def cleared_session_handler(_request, _error):
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "此会话已清除。请刷新页面，使用新会话。"},
+    )
 
 # ─── REST Endpoints ─────────────────────────────────────────────
 
@@ -188,6 +196,10 @@ class ThoughtRecordUpdateRequest(BaseModel):
 class SyncRequest(BaseModel):
     session_id: str = "default"
     items: list[dict]
+
+
+class RestoreDataRequest(BaseModel):
+    snapshot: dict
 
 
 def build_language_instruction(language: str) -> str:
@@ -446,6 +458,8 @@ async def chat(req: ChatRequest):
             round((time.monotonic() - request_started_at) * 1000),
         )
         raise _chat_http_error(error, request_id) from error
+    except SessionClearedError:
+        raise
     except Exception as error:
         logger.exception(
             "chat_request_failed request_id=%s model=%s error_type=%s elapsed_ms=%s",
@@ -532,6 +546,7 @@ async def chat_stream(req: ChatRequest):
     async def generate():
         nonlocal messages
         tool_round = 0
+        client_events = []
 
         while True:
             tool_round += 1
@@ -600,6 +615,7 @@ async def chat_stream(req: ChatRequest):
                                     raw_args,
                                     tool_context,
                                 )
+                                client_events.extend(tool_result.client_events)
                                 yield f"data: {json.dumps({'tool_call': fn_name})}\n\n"
                                 tool_message = {
                                     "role": "tool",
@@ -618,7 +634,7 @@ async def chat_stream(req: ChatRequest):
                             sessions.add_message(req.session_id, "user", req.message)
                             sessions.add_message(req.session_id, "assistant", clean)
                             await memory_service.after_response(req.session_id, req.message)
-                            yield f"data: {json.dumps({'done': True, 'full_response': clean, 'context_used': [result.to_dict() for result in rag_results], 'request_id': request_id})}\n\n"
+                            yield f"data: {json.dumps({'done': True, 'full_response': clean, 'context_used': [result.to_dict() for result in rag_results], 'client_events': client_events, 'request_id': request_id})}\n\n"
                             return  # Exit generator completely
             except LLMError as error:
                 logger.warning(
@@ -628,6 +644,9 @@ async def chat_stream(req: ChatRequest):
                     error.kind,
                 )
                 yield f"data: {json.dumps({'error': error.user_message, 'code': error.kind, 'request_id': request_id})}\n\n"
+                return
+            except SessionClearedError:
+                yield f"data: {json.dumps({'error': '此会话已清除，请刷新页面。', 'code': 'session_cleared', 'request_id': request_id}, ensure_ascii=False)}\n\n"
                 return
             except Exception as error:
                 logger.exception(
@@ -767,6 +786,26 @@ async def sync_tests(req: SyncRequest):
 async def sync_activities(req: SyncRequest):
     sessions.sync_activities(req.session_id, req.items)
     return {"status": "ok"}
+
+
+@app.get("/api/data/{session_id}")
+async def export_session_data(session_id: str):
+    return sessions.export_session_data(session_id)
+
+
+@app.put("/api/data/{session_id}")
+async def restore_session_data(session_id: str, req: RestoreDataRequest):
+    try:
+        sessions.restore_session_data(session_id, req.snapshot)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return {"status": "restored"}
+
+
+@app.delete("/api/data/{session_id}")
+async def clear_session_data(session_id: str):
+    sessions.clear_session_data(session_id)
+    return {"status": "cleared"}
 
 
 # ─── INSIGHTS ENDPOINT ───────────────────────────────────────────
@@ -999,6 +1038,41 @@ async def health():
         "model": ACTIVE_MODEL,
         **rag_service.status(),
     }
+
+
+@app.get("/api/ready")
+async def model_readiness():
+    """Check whether the configured chat model is usable without sending a prompt."""
+    if LLM_PROVIDER != "ollama":
+        return {"ready": True, "provider": "DeepSeek", "model": ACTIVE_MODEL,
+                "detail": "API Key 已配置；此检查不验证云端额度或网络。"}
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
+            response = await client.get(f"{OLLAMA_BASE_URL.rstrip('/')}/api/tags")
+            response.raise_for_status()
+            payload = response.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("models"), list):
+            raise ValueError("Invalid Ollama model list")
+        if any(
+            not isinstance(item, dict) or not isinstance(item.get("name"), str)
+            for item in payload["models"]
+        ):
+            raise ValueError("Invalid Ollama model entry")
+        if any(
+            item["name"] == OLLAMA_MODEL
+            for item in payload["models"]
+        ):
+            return {"ready": True, "provider": "Ollama", "model": OLLAMA_MODEL}
+        return {"ready": False, "provider": "Ollama", "model": OLLAMA_MODEL,
+                "detail": f"模型未下载，请运行 ollama pull {OLLAMA_MODEL}"}
+    except httpx.HTTPError:
+        return {"ready": False, "provider": "Ollama", "model": OLLAMA_MODEL,
+                "detail": "无法连接 Ollama，请启动 Ollama 并检查 OLLAMA_BASE_URL。"}
+    except (ValueError, TypeError):
+        return {"ready": False, "provider": "Ollama", "model": OLLAMA_MODEL,
+                "detail": "无法读取 Ollama 模型清单，请检查 OLLAMA_BASE_URL。"}
 
 @app.get("/api/report/{session_id}")
 async def get_session_report(session_id: str, lang: str = "zh"):
@@ -1266,6 +1340,15 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                             "request_id": request_id,
                         }
                     )
+                except SessionClearedError:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "content": "此会话已清除，请刷新页面。",
+                            "code": "session_cleared",
+                            "request_id": request_id,
+                        }
+                    )
                 except Exception as error:
                     logger.exception(
                         "websocket_chat_failed request_id=%s model=%s error_type=%s",
@@ -1291,7 +1374,15 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                     }
                 )
     except WebSocketDisconnect:
-        sessions.save_session(session_id)
+        try:
+            sessions.save_session(session_id)
+        except SessionClearedError:
+            pass
+    except SessionClearedError:
+        await websocket.send_json(
+            {"type": "error", "code": "session_cleared", "content": "此会话已清除，请刷新页面。"}
+        )
+        await websocket.close(code=1008)
 
 
 # Serve static frontend at the very end to catch all non-API paths

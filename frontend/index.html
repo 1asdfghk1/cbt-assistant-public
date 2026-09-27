@@ -73,7 +73,7 @@
                             style="padding:4px;"><i data-lucide="volume-x" style="width:18px;"></i></button>
                         <button class="btn-icon" id="micBtn" onclick="toggleMic()" title="语音输入" data-i18n-title="mic_title"
                             style="padding:4px;"><i data-lucide="mic" style="width:18px;"></i></button>
-                        <button class="btn-send" id="sendBtn" onclick="sendMessage()"><i data-lucide="arrow-up"
+                        <button class="btn-send" id="sendBtn" onclick="handleChatAction()" title="发送消息"><i data-lucide="arrow-up"
                                 style="width:18px;"></i></button>
                     </div>
                 </div>
@@ -788,7 +788,7 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=2"></script>
+    <script src="js/api.js?v=3"></script>
     <script src="js/security.js?v=1"></script>
 
     <!-- Article Library Modal -->
@@ -889,14 +889,23 @@
                     <div style="font-size:11px;color:var(--gray);" data-i18n-html="download_txt_desc">文本文件<br>包含所有记录</div>
                 </button>
             </div>
+            <div style="border-top:1px solid var(--border);margin-top:18px;padding-top:18px;display:grid;gap:8px;">
+                <button type="button" onclick="downloadDataBackup()">备份全部记录（JSON）</button>
+                <button type="button" onclick="document.getElementById('restoreDataFile').click()">从备份恢复</button>
+                <input id="restoreDataFile" type="file" accept="application/json,.json" hidden
+                    onchange="restoreDataBackup(this.files[0]);this.value=''">
+                <button type="button" onclick="clearAllMyData()" style="color:#a11;">清除当前会话的全部记录</button>
+                <small>备份包含聊天、记忆和浏览器记录，请妥善保管。恢复会替换当前会话的数据。</small>
+            </div>
         </div>
     </div>
 
     <script src="js/ui.js?v=20"></script>
     <script src="js/report.js?v=2"></script>
-    <script src="js/chat_manager.js?v=6"></script>
+    <script src="js/data_backup.js?v=1"></script>
+    <script src="js/chat_manager.js?v=7"></script>
     <script src="js/cbt_tools.js?v=14"></script>
-    <script src="js/main.js?v=5"></script>
+    <script src="js/main.js?v=6"></script>
 
     <!-- Fullscreen PMR Overlay -->
     <div id="pmrOverlay" class="pmr-overlay" style="display:none;">

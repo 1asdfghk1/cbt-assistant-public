@@ -19,7 +19,7 @@ class MemoryStore:
     def add_or_update(self, session_id: str, candidate: MemoryCandidate) -> MemoryWriteResult:
         now = datetime.now().isoformat()
         normalized = normalize_memory_text(candidate.content)
-        with self.db._get_conn() as conn:
+        with self.db._get_writable_conn(session_id) as conn:
             conn.execute(
                 "INSERT OR IGNORE INTO sessions (id, created_at) VALUES (?, ?)",
                 (session_id, now),
@@ -104,7 +104,7 @@ class MemoryStore:
         if not normalized:
             return None
         now = datetime.now().isoformat()
-        with self.db._get_conn() as conn:
+        with self.db._get_writable_conn(session_id) as conn:
             cursor = conn.execute(
                 """
                 UPDATE conversation_memories
@@ -122,7 +122,7 @@ class MemoryStore:
             return MemoryItem.from_row(row)
 
     def delete(self, session_id: str, memory_id: int) -> bool:
-        with self.db._get_conn() as conn:
+        with self.db._get_writable_conn(session_id) as conn:
             cursor = conn.execute(
                 "DELETE FROM conversation_memories WHERE id = ? AND session_id = ?",
                 (memory_id, session_id),
@@ -131,7 +131,7 @@ class MemoryStore:
             return cursor.rowcount > 0
 
     def clear_session(self, session_id: str) -> int:
-        with self.db._get_conn() as conn:
+        with self.db._get_writable_conn(session_id) as conn:
             cursor = conn.execute(
                 "DELETE FROM conversation_memories WHERE session_id = ?", (session_id,)
             )
@@ -139,7 +139,7 @@ class MemoryStore:
             return cursor.rowcount
 
     def deactivate(self, session_id: str, memory_id: int) -> bool:
-        with self.db._get_conn() as conn:
+        with self.db._get_writable_conn(session_id) as conn:
             cursor = conn.execute(
                 "UPDATE conversation_memories SET active = 0 WHERE id = ? AND session_id = ?",
                 (memory_id, session_id),

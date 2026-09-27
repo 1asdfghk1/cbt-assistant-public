@@ -1,4 +1,4 @@
-# CBT Assistant — Local Public Demo / 本地公开演示版（v0.1.0）
+# CBT Assistant — Local Public Demo / 本地公开演示版（v0.1.1）
 
 [English](#english) | [简体中文](#简体中文)
 
@@ -33,10 +33,12 @@ source .venv/Scripts/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
 ollama pull qwen3:4b-instruct
-python backend/server.py
+python scripts/start_local.py
 ```
 
 Open <http://127.0.0.1:8001> in your browser. If Ollama is not running, start its app or run `ollama serve` in another terminal. The local model is downloaded by **you** with `ollama pull`; this repository does not redistribute model weights.
+
+The startup script checks Python, the configured model, and the local port before serving the app. `/api/ready` reports whether the local Ollama model is available; DeepSeek mode only confirms configuration, not cloud availability.
 
 The public demo uses port `8001` so it does not share the original development app's `8000` browser storage. Do not point both versions at the same origin: the frontend syncs records from browser local storage into its SQLite database.
 
@@ -50,7 +52,7 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
 ollama pull qwen3:4b-instruct
-python backend/server.py
+python scripts/start_local.py
 ```
 
 Open <http://127.0.0.1:8001>. If the Ollama service is not already running, start it separately with `ollama serve`.
@@ -69,6 +71,12 @@ Get your own key from the DeepSeek platform. Never paste a real key into source 
 
 To switch back to local inference, set `LLM_PROVIDER=ollama` and restart the backend. The provider is selected at startup, not with a browser button. `/api/health` shows which provider/model is configured; it does not prove that Ollama is running or that a model is downloaded.
 
+### Back up, restore, and clear your records
+
+Open **Export records** in the sidebar. The JSON backup contains the current browser session's SQLite records, conversation memories, and browser records. Keep this private file safe. Restore replaces the current session's records; clear removes the current session's server and browser records. After either action, the page reloads. Restore is intended for a backup created by this app.
+
+The chat now shows streamed text as it arrives. **Stop** cancels the browser request; a tool action may already have completed on the server, so check your records before resending a stopped request.
+
 ### Optional knowledge-base retrieval
 
 RAG is disabled by default. It needs an embedding model in addition to the chat model. To enable local retrieval:
@@ -83,7 +91,7 @@ Then set `RAG_ENABLED=true` in `.env` and restart. The Markdown knowledge files 
 
 - The server intentionally listens only on the local computer. It has no user accounts or authentication; do not expose it to a LAN, public network, tunnel, or reverse proxy.
 - Runtime SQLite data is stored under `data/` by default. `.env` and `data/` are excluded from Git; deleting your own runtime data is a separate, deliberate action.
-- The browser also keeps journals and settings in local storage. Clearing the server database alone does not clear that browser copy.
+- The browser also keeps journals and settings in local storage. Use the in-app clear action to clear the current session from both stores. Old files saved elsewhere are unaffected.
 - Ollama chat stays local **only when** `OLLAMA_BASE_URL` points to your own local Ollama server. Changing it to a remote address changes the privacy boundary.
 - The SOS flow and model-generated guidance are not emergency care.
 
@@ -91,9 +99,12 @@ Then set `RAG_ENABLED=true` in `.env` and restart. The Markdown knowledge files 
 
 ```bash
 python -m pytest -q
+node --test tests/frontend_security.test.js tests/frontend_behavior.test.js
 ```
 
 The regular suite uses temporary databases and fake model responses; it does not need a DeepSeek key or a running Ollama service. A separately marked integration test needs a real local model; see [TESTING.md](TESTING.md).
+
+Direct Python dependencies are pinned in `requirements.txt`. CI runs on Windows and Ubuntu with Python 3.12 and Node.js 22.
 
 ### Troubleshooting
 
@@ -148,10 +159,12 @@ source .venv/Scripts/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
 ollama pull qwen3:4b-instruct
-python backend/server.py
+python scripts/start_local.py
 ```
 
 然后在浏览器中打开 <http://127.0.0.1:8001>。如果 Ollama 尚未运行，请启动 Ollama 应用，或在另一个终端执行 `ollama serve`。本地模型由**你自己**通过 `ollama pull` 下载；本仓库不提供模型权重文件。
+
+启动脚本会检查 Python、所选模型及本地端口。`/api/ready` 可以检查本地 Ollama 模型是否可用；DeepSeek 模式只确认配置，不验证云端可用性。
 
 公开演示版使用 `8001` 端口，以免与使用 `8000` 端口的原开发版共享浏览器存储。请不要让两个版本使用同一个网址和端口：前端会将浏览器本地存储中的记录同步到 SQLite 数据库。
 
@@ -165,7 +178,7 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
 ollama pull qwen3:4b-instruct
-python backend/server.py
+python scripts/start_local.py
 ```
 
 打开 <http://127.0.0.1:8001>。如果 Ollama 服务尚未运行，请另外执行 `ollama serve`。
@@ -184,6 +197,12 @@ DEEPSEEK_MODEL=deepseek-chat
 
 要切回本地模型，请将 `LLM_PROVIDER` 设为 `ollama`，然后重启后端。模型服务是在启动时选择的，目前不能通过浏览器按钮切换。`/api/health` 可以显示当前配置的服务和模型，但不能证明 Ollama 正在运行，也不能证明模型已经下载。
 
+### 备份、恢复与清除记录
+
+点击侧栏中的“导出记录”。JSON 备份包含当前浏览器会话的 SQLite 记录、对话记忆和浏览器记录，请妥善保管。恢复会替换备份对应会话的数据；清除会移除当前会话在服务端和浏览器中的记录。操作完成后页面会重新加载。恢复功能适用于本应用导出的备份。
+
+聊天现在会逐步显示回复。点击“停止生成”会取消浏览器请求；工具操作可能已经在服务端完成，重新发送前请先检查记录，避免重复操作。
+
 ### 可选的知识库检索
 
 RAG（知识库检索增强）默认关闭。除了聊天模型，它还需要一个嵌入模型。要启用本地检索，先执行：
@@ -198,7 +217,7 @@ ollama pull qwen3-embedding:4b
 
 - 服务仅监听本机地址。应用没有用户账户或身份验证功能，请勿将它开放到局域网、公网、网络隧道或反向代理。
 - 运行时的 SQLite 数据默认保存在 `data/` 下。Git 会忽略 `.env` 和 `data/`；删除自己的运行数据需要单独、谨慎地操作。
-- 浏览器也会在本地保存日记和设置。只清除服务端数据库，不会清除浏览器中的副本。
+- 浏览器也会在本地保存日记和设置。使用应用内的清除功能可同时清除当前会话的两份数据；此前另行保存的文件不会被清除。
 - **只有当** `OLLAMA_BASE_URL` 指向你自己电脑上的 Ollama 服务时，Ollama 聊天才保持在本地。将它改为远程地址会改变数据的隐私边界。
 - SOS 功能和模型生成的建议不能替代紧急救助。
 
@@ -206,9 +225,12 @@ ollama pull qwen3-embedding:4b
 
 ```bash
 python -m pytest -q
+node --test tests/frontend_security.test.js tests/frontend_behavior.test.js
 ```
 
 常规测试使用临时数据库和模拟的模型回复，不需要 DeepSeek API Key，也不需要运行 Ollama。另有一个单独标记的集成测试，需要真实的本地模型；详见 [TESTING.md](TESTING.md)。
+
+`requirements.txt` 固定了直接 Python 依赖的版本。自动测试在 Windows 与 Ubuntu 上使用 Python 3.12 和 Node.js 22 运行。
 
 ### 常见问题
 
