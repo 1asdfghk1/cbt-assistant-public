@@ -4,11 +4,16 @@ on:
   push:
     branches:
       - main
+      - 'optimize/**'
   pull_request:
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
@@ -29,8 +34,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Validate dependency installation
+        run: python -m pip check
+
       - name: Run tests
         run: pytest
 
-      - name: Run frontend security tests
-        run: node --test tests/frontend_security.test.js
+      - name: Run frontend tests
+        run: node --test tests/frontend_security.test.js tests/frontend_behavior.test.js

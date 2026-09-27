@@ -1,6 +1,17 @@
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+
+
+BACKUP_TABLES = (
+    "messages", "mood_logs", "thought_records", "sleep_logs", "tests",
+    "activities", "session_summaries", "conversation_memories",
+)
+
+
+class SessionClearedError(Exception):
+    """A cleared session ID cannot be reused by a stale browser tab."""
 
 
 class SQLiteSessionManager:
@@ -16,8 +27,30 @@ class SQLiteSessionManager:
         conn.row_factory = sqlite3.Row
         return conn
 
+    @contextmanager
+    def _get_writable_conn(self, session_id: str):
+        """Serialize writes with clear/restore before checking a tombstone."""
+        conn = self._get_conn()
+        try:
+            with conn:
+                conn.execute("BEGIN IMMEDIATE")
+                if conn.execute(
+                    "SELECT 1 FROM cleared_sessions WHERE session_id = ?", (session_id,)
+                ).fetchone():
+                    raise SessionClearedError(session_id)
+                yield conn
+        finally:
+            conn.close()
     def _init_db(self):
         with self._get_conn() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cleared_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    cleared_at TEXT NOT NULL
+                )
+                """
+            )
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -152,7 +185,7 @@ class SQLiteSessionManager:
             )
 
     def get_or_create(self, session_id: str) -> dict:
-        with self._get_conn() as conn:
+        with self._get_writable_conn(session_id) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
             session = cursor.fetchone()
@@ -201,7 +234,7 @@ class SQLiteSessionManager:
 
     def add_message(self, session_id: str, role: str, content: str):
         now = datetime.now().isoformat()
-        with self._get_conn() as conn:
+        with self._get_writable_conn(session_id) as conn:
             cursor = conn.cursor()
             # Ensure session exists
             cursor.execute(
@@ -218,7 +251,7 @@ class SQLiteSessionManager:
 
     def add_mood(self, session_id: str, score: int, note: str = ""):
         now = datetime.now().isoformat()
-        with self._get_conn() as conn:
+        with self._get_writable_conn(session_id) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT OR IGNORE INTO sessions (id, created_at) VALUES (?, ?)",
@@ -242,7 +275,7 @@ class SQLiteSessionManager:
         rational_response: str,
     ):
         now = datetime.now().isoformat()
-        with self._get_conn() as conn:
+        with self._get_writable_conn(session_id) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT OR IGNORE INTO sessions (id, created_at) VALUES (?, ?)",
@@ -276,7 +309,7 @@ class SQLiteSessionManager:
         distortion: str,
         rational_response: str,
     ) -> bool:
-        with self._get_conn() as conn:
+        with self._get_writable_conn(session_id) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -299,7 +332,11 @@ class SQLiteSessionManager:
             return cursor.rowcount > 0
 
     def sync_sleep_logs(self, session_id: str, logs: list[dict]):
-        with self._get_conn() as conn:
+        with self._get_writable_conn(session_id) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO sessions (id, created_at) VALUES (?, ?)",
+                (session_id, datetime.now().isoformat()),
+            )
             conn.execute("DELETE FROM sleep_logs WHERE session_id = ?", (session_id,))
             for log in logs:
                 conn.execute(
@@ -318,7 +355,11 @@ class SQLiteSessionManager:
             conn.commit()
 
     def sync_test_results(self, session_id: str, tests: list[dict]):
-        with self._get_conn() as conn:
+        with self._get_writable_conn(session_id) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO sessions (id, created_at) VALUES (?, ?)",
+                (session_id, datetime.now().isoformat()),
+            )
             conn.execute("DELETE FROM tests WHERE session_id = ?", (session_id,))
             for test in tests:
                 conn.execute(
@@ -334,7 +375,11 @@ class SQLiteSessionManager:
             conn.commit()
 
     def sync_activities(self, session_id: str, activities: list[dict]):
-        with self._get_conn() as conn:
+        with self._get_writable_conn(session_id) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO sessions (id, created_at) VALUES (?, ?)",
+                (session_id, datetime.now().isoformat()),
+            )
             conn.execute("DELETE FROM activities WHERE session_id = ?", (session_id,))
             for act in activities:
                 conn.execute(
@@ -448,7 +493,7 @@ class SQLiteSessionManager:
         last_summarized_msg_id: int | None = None,
     ):
         now = datetime.now().isoformat()
-        with self._get_conn() as conn:
+        with self._get_writable_conn(session_id) as conn:
             cursor = conn.cursor()
             if last_summarized_msg_id is None:
                 cursor.execute("SELECT MAX(id) FROM messages WHERE session_id = ?", (session_id,))
@@ -466,5 +511,85 @@ class SQLiteSessionManager:
             conn.commit()
 
     def save_session(self, session_id: str):
-        # Database automatically persists on commit, so this is mostly a legacy stub for compatibility.
-        pass
+        # Preserve the legacy API while rejecting a stale cleared session ID.
+        with self._get_writable_conn(session_id):
+            pass
+
+    def export_session_data(self, session_id: str) -> dict:
+        """Export every database record belonging to one browser session."""
+        with self._get_conn() as conn:
+            session = conn.execute(
+                "SELECT created_at FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            tables = {
+                name: [dict(row) for row in conn.execute(
+                    f"SELECT * FROM {name} WHERE session_id = ? ORDER BY rowid", (session_id,)
+                )]
+                for name in BACKUP_TABLES
+            }
+        return {"session_id": session_id,
+                "created_at": session["created_at"] if session else None,
+                "tables": tables}
+
+    def clear_session_data(self, session_id: str) -> None:
+        with self._get_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            for name in BACKUP_TABLES:
+                conn.execute(f"DELETE FROM {name} WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            conn.execute(
+                "INSERT OR IGNORE INTO cleared_sessions (session_id, cleared_at) VALUES (?, ?)",
+                (session_id, datetime.now().isoformat()),
+            )
+
+    def restore_session_data(self, session_id: str, snapshot: dict) -> None:
+        """Replace one session atomically; retain all other sessions."""
+        if not isinstance(snapshot, dict) or snapshot.get("session_id") != session_id:
+            raise ValueError("备份的会话 ID 不匹配。")
+        tables = snapshot.get("tables")
+        if not isinstance(tables, dict) or set(tables) != set(BACKUP_TABLES):
+            raise ValueError("备份缺少数据表或格式不正确。")
+        created_at = snapshot.get("created_at")
+        if created_at is not None and not isinstance(created_at, str):
+            raise ValueError("备份的创建时间格式不正确。")
+        try:
+            with self._get_conn() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                columns = {
+                    name: {item["name"] for item in conn.execute(f"PRAGMA table_info({name})")}
+                    for name in BACKUP_TABLES
+                }
+                for name, rows in tables.items():
+                    if not isinstance(rows, list):
+                        raise ValueError(f"备份中的 {name} 格式不正确。")
+                    for row in rows:
+                        if not isinstance(row, dict) or not set(row) <= columns[name]:
+                            raise ValueError(f"备份中的 {name} 字段不正确。")
+                        if row.get("session_id") != session_id:
+                            raise ValueError(f"备份中的 {name} 会话 ID 不匹配。")
+                        if any(isinstance(value, (dict, list)) for value in row.values()):
+                            raise ValueError(f"备份中的 {name} 包含无效字段值。")
+                for name in BACKUP_TABLES:
+                    conn.execute(f"DELETE FROM {name} WHERE session_id = ?", (session_id,))
+                conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+                conn.execute("DELETE FROM cleared_sessions WHERE session_id = ?", (session_id,))
+                conn.execute(
+                    "INSERT INTO sessions (id, created_at) VALUES (?, ?)",
+                    (session_id, created_at or datetime.now().isoformat()),
+                )
+                message_ids = {}
+                for name in BACKUP_TABLES:
+                    for source in tables[name]:
+                        row = {key: value for key, value in source.items() if key != "id"}
+                        row["session_id"] = session_id
+                        if name == "session_summaries":
+                            old_id = row.get("last_summarized_msg_id")
+                            row["last_summarized_msg_id"] = message_ids.get(old_id, 0)
+                        keys = list(row)
+                        placeholders = ", ".join("?" for _ in keys)
+                        query = f"INSERT INTO {name} ({', '.join(keys)}) VALUES ({placeholders})"
+                        cursor = conn.execute(query, [row[key] for key in keys])
+                        if name == "messages" and source.get("id") is not None:
+                            message_ids[source["id"]] = cursor.lastrowid
+        except (sqlite3.IntegrityError, OverflowError) as error:
+            raise ValueError("备份内容不符合数据库格式。") from error

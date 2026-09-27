@@ -1,6 +1,7 @@
 // A local model may need time to load and complete two tool-call rounds.
 const CHAT_REQUEST_TIMEOUT_MS = 300000;
 let activeChatController = null;
+let chatWasCancelled = false;
 
 class ChatRequestError extends Error {
     constructor(message, status = 0, code = '') {
@@ -25,8 +26,100 @@ function setChatProcessing(processing, inputElement) {
     isProc = processing;
     const sendButton = document.getElementById('sendBtn');
     if (inputElement) inputElement.disabled = processing;
-    if (sendButton) sendButton.disabled = processing;
+    if (sendButton) {
+        sendButton.disabled = false;
+        sendButton.title = processing ? '停止生成' : '发送消息';
+        sendButton.innerHTML = processing
+            ? '<i data-lucide="square" style="width:18px"></i>'
+            : '<i data-lucide="arrow-up" style="width:18px"></i>';
+        if (window.lucide) lucide.createIcons();
+    }
     document.getElementById('mainContainer')?.setAttribute('aria-busy', String(processing));
+}
+
+function handleChatAction() {
+    if (isProc) {
+        chatWasCancelled = true;
+        activeChatController?.abort();
+    } else {
+        sendMessage();
+    }
+}
+
+function updateStreamMessage(content) {
+    const loading = document.getElementById('loading');
+    if (!loading) return;
+    const text = loading.querySelector('.msg-content');
+    if (text) text.innerHTML = window.CBTSecurity.renderBasicMessage(content);
+    const list = document.getElementById('messages');
+    if (list) list.scrollTop = list.scrollHeight;
+}
+
+function completeStreamMessage(content) {
+    const loading = document.getElementById('loading');
+    if (!loading) return addMsg('assistant', content);
+    loading.removeAttribute('id');
+    const text = loading.querySelector('.msg-content');
+    if (text) text.innerHTML = window.CBTSecurity.renderBasicMessage(content);
+    return loading;
+}
+
+function normalizeSsePending(text) {
+    const hasTrailingCR = text.endsWith('\r');
+    const complete = hasTrailingCR ? text.slice(0, -1) : text;
+    return complete.replace(/\r\n|\r/g, '\n') + (hasTrailingCR ? '\r' : '');
+}
+
+async function readChatStream(response, signal, onToken) {
+    if (!response.ok) throw new ChatRequestError('AI 服务暂时不可用，请稍后重试。', response.status);
+    if (!response.body) throw new ChatRequestError('浏览器无法读取流式回复，请稍后重试。');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let pending = '';
+    let fullText = '';
+    try {
+        while (true) {
+            const { value, done } = await reader.read();
+            if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+            pending += done ? decoder.decode() : decoder.decode(value, { stream: true });
+            pending = done ? pending.replace(/\r\n|\r/g, '\n') : normalizeSsePending(pending);
+            let boundary;
+            while ((boundary = pending.indexOf('\n\n')) !== -1) {
+                const block = pending.slice(0, boundary);
+                pending = pending.slice(boundary + 2);
+                const data = block.split('\n').filter(line => line.startsWith('data:'))
+                    .map(line => line.slice(5).trimStart()).join('\n');
+                if (!data) continue;
+                if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+                let event;
+                try {
+                    event = JSON.parse(data);
+                } catch (error) {
+                    throw new ChatRequestError('服务返回了无法识别的流式数据。', 502);
+                }
+                if (event.error) throw new ChatRequestError(event.error, 502, event.code || '');
+                if (event.tool_call) {
+                    fullText = '';
+                    onToken('正在读取记录…');
+                }
+                if (event.token) {
+                    fullText += event.token;
+                    // Never display an unfinished reasoning tag from a model.
+                    const visible = fullText.replace(/<think>[\s\S]*?<\/think>/g, '')
+                        .replace(/<think>[\s\S]*$/g, '');
+                    if (visible.trim()) onToken(visible);
+                }
+                if (event.done) {
+                    return event;
+                }
+            }
+            if (done) break;
+        }
+        throw new ChatRequestError('流式回复意外中断。', 502);
+    } finally {
+        try { await reader.cancel(); } catch (error) { /* Connection may already be closed. */ }
+        reader.releaseLock();
+    }
 }
 
 function getChatErrorMessage(error, timedOut) {
@@ -63,6 +156,7 @@ async function sendMessage() {
 
     const controller = new AbortController();
     activeChatController = controller;
+    chatWasCancelled = false;
     let timedOut = false;
     const timeoutId = window.setTimeout(() => {
         timedOut = true;
@@ -77,35 +171,20 @@ async function sendMessage() {
         document.getElementById('mainContainer')?.classList.remove('empty-state');
 
         addMsg('user', txt);
-    addMsg('assistant', '', 'loading');
+        addMsg('assistant', '', 'loading');
 
-        let res = await fetch(API + '/api/chat', {
+        let res = await fetch(API + '/api/chat/stream', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: txt, session_id: SESSION_ID, language: currentChatLanguage() }),
             signal: controller.signal
         });
-        let data = {};
-        try {
-            data = await res.json();
-        } catch (parseError) {
-            throw new ChatRequestError('服务返回了无法识别的响应，请稍后重试。', res.status);
-        }
-
-        if (!res.ok) {
-            const detail = data?.detail;
-            const message = typeof detail?.message === 'string'
-                ? detail.message
-                : (res.status === 429
-                    ? 'AI 服务当前请求较多，请稍后再试。'
-                    : 'AI 服务暂时不可用，请稍后重试。');
-            throw new ChatRequestError(message, res.status, detail?.code || '');
-        }
-
-        if (typeof data.response !== 'string' || !data.response.trim()) {
+        const data = await readChatStream(res, controller.signal, updateStreamMessage);
+        if (controller.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+        if (typeof data.full_response !== 'string' || !data.full_response.trim()) {
             throw new ChatRequestError('AI 服务没有返回有效内容，请重新尝试。', 502, 'empty_response');
         }
 
-        addMsg('assistant', data.response);
+        completeStreamMessage(data.full_response);
         applyChatClientEvents(data.client_events);
 
         if (
@@ -114,7 +193,8 @@ async function sendMessage() {
             && window.playAssistantSpeech
         ) {
             try {
-                await window.playAssistantSpeech(data.response, currentChatLanguage());
+                Promise.resolve(window.playAssistantSpeech(data.full_response, currentChatLanguage()))
+                    .catch(ttsError => console.warn('TTS failed after a successful text response.', ttsError));
             } catch (ttsError) {
                 console.warn('TTS failed after a successful text response.', ttsError);
             }
@@ -122,7 +202,9 @@ async function sendMessage() {
     } catch (e) {
         if (e?.name !== 'AbortError') console.error('CHAT ERROR:', e);
         if (!inEl.value) inEl.value = txt;
-        addMsg('assistant', '⚠️ ' + getChatErrorMessage(e, timedOut));
+        document.getElementById('loading')?.remove();
+        const message = chatWasCancelled ? '本次生成已停止。' : getChatErrorMessage(e, timedOut);
+        addMsg('assistant', '⚠️ ' + message + ' 请求可能已被处理，请先检查记录，再决定是否手动发送。');
     } finally {
         window.clearTimeout(timeoutId);
         document.getElementById('loading')?.remove();
@@ -155,4 +237,5 @@ function addMsg(role, content, id = '') {
     list.appendChild(div);
     lucide.createIcons();
     list.scrollTop = list.scrollHeight;
+    return div;
 }

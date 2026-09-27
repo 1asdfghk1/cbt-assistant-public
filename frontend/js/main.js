@@ -7,9 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
     });
-    syncData('/api/sync/sleep', 'sleepLog');
-    syncData('/api/sync/activities', 'activities');
-    syncTests();
+    // A restored snapshot is the source of truth. User edits still sync immediately.
+    if (localStorage.getItem('CBT_RESTORED_SESSION') !== SESSION_ID) {
+        syncData('/api/sync/sleep', 'sleepLog');
+        syncData('/api/sync/activities', 'activities');
+        syncTests();
+    }
 
     // Restore notification schedules
     const ns = JSON.parse(localStorage.getItem('notifSettings') || '{}');
